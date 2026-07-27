@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from fastapi.responses import Response
 
 app = FastAPI()
 
@@ -10,9 +11,13 @@ tasks = [
     {"id": 3, "title": "Build CRUD API", "done": False}
 ]
 
-# Pydantic model: yeh batayega ke client ko JSON mein kya bhejna hai
+# Models for validation
 class TaskCreate(BaseModel):
-    title: str | None = None  # None isliye rakha taake agar title missing ho toh error aaye
+    title: str | None = None
+
+class TaskUpdate(BaseModel):
+    title: str | None = None
+    done: bool | None = None
 
 @app.get("/")
 def read_root():
@@ -33,22 +38,40 @@ def get_task(task_id: int):
             return task
     raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
 
-# POST endpoint - Naya task create karne ke liye
 @app.post("/tasks", status_code=201)
 def create_task(task: TaskCreate):
-    # Validation: agar title missing hai ya empty string hai
     if not task.title or not task.title.strip():
         raise HTTPException(status_code=400, detail="Title is required and cannot be empty")
-
-    # Next free ID calculate karna
     next_id = max([t["id"] for t in tasks]) + 1 if tasks else 1
-
-    # Naya task object banana
-    new_task = {
-        "id": next_id,
-        "title": task.title,
-        "done": False
-    }
-    
+    new_task = {"id": next_id, "title": task.title, "done": False}
     tasks.append(new_task)
     return new_task
+
+# PUT endpoint - Update a task
+@app.put("/tasks/{task_id}")
+def update_task(task_id: int, task_update: TaskUpdate):
+    for task in tasks:
+        if task["id"] == task_id:
+         
+            if task_update.title is not None:
+                if not task_update.title.strip():
+                    raise HTTPException(status_code=400, detail="Title cannot be empty")
+                task["title"] = task_update.title
+            
+            
+            if task_update.done is not None:
+                task["done"] = task_update.done
+                
+            return task
+            
+    raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+
+# DELETE endpoint - Delete a task
+@app.delete("/tasks/{task_id}", status_code=204)
+def delete_task(task_id: int):
+    for i, task in enumerate(tasks):
+        if task["id"] == task_id:
+            tasks.pop(i)
+            return Response(status_code=204) # 204 means success but no body
+            
+    raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
